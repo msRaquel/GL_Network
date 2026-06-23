@@ -17,7 +17,7 @@ campus. The destination should be able to read the incoming TTL.
 // ipv4 values range from 0 - 255 for header fields, so we use unsigned 8 bit variable to replicate the header field
 struct Signal{
     uint8_t ttl;
-    double RTT_ms;
+    float RTT_ms;
 
 };
 
@@ -35,11 +35,21 @@ bool executePing(){
 };
 
 // search for a specific set of characters from a buffer
-// return the position to that location
-size_t findStringLoc(char *buff, const char *goalString){
+// update size argument and then 
+int findStringLoc(char *buff, const char *goalString, size_t &index){
 
-    const char *found_ptr = buff;  // assign pointer to beginning of chunk
+    // look for goal string, in this case search for  
+   char *foundString = strstr(buff, goalString);
 
+   if (foundString != NULL){
+        index = foundString - buff;
+   }
+   else {
+
+        return -1;
+   }
+
+   return 1;
 
 }
 
@@ -48,8 +58,25 @@ size_t findStringLoc(char *buff, const char *goalString){
 // once values have been extracted initialize a peer struct with the values found
 void extractPingStats(struct Peer &peer, char *buff){
     // use findString function to find the location of the time and round trip values
-    size_t RTT_pos = findStringLoc(buff, "time=");
-    size_t TTL_pos = findStringLoc(buff, "RTT=");
+    size_t RTT_pos,TTL_pos;
+     
+    // find the location of where the time value exists
+    if((findStringLoc(buff, "time=", RTT_pos)) == -1){
+        perror("no such value exists in the buffer");
+    }
+    // find the location of where the rtt value exists
+    if((findStringLoc(buff, "rtt=", RTT_pos)) == -1){
+        perror("no such value exists in the buffer");
+    }
+
+    sscanf(buff + RTT_pos, "time=%fms", &peer.signal.RTT_ms);
+    sscanf(buff + TTL_pos, "TTL=%d", &peer.signal.ttl);
+
+    std::cout<< "Latency measured at " << peer.signal.RTT_ms << std::endl;
+    std::cout<< "TTL measured at " << peer.signal.ttl << std::endl;
+
+
+
 
 
 }
