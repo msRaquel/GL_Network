@@ -13,6 +13,7 @@ campus. The destination should be able to read the incoming TTL.
 #include <netdb.h>
 
 #define MAX_BUFFER_SIZE 256 
+#define STARTING_TTL 64
 // signal attached to each peer (node)
 // ipv4 values range from 0 - 255 for header fields, so we use unsigned 8 bit variable to replicate the header field
 struct Signal{
@@ -61,21 +62,20 @@ void extractPingStats(struct Peer &peer, char *buff){
     size_t RTT_pos,TTL_pos;
      
     // find the location of where the time value exists
-    if((findStringLoc(buff, "time=", RTT_pos)) == -1){
-        perror("no such value exists in the buffer");
+   // 1. Search for "time=" and "ttl=" (Note: Linux ping uses lowercase "ttl=")
+    int foundTime = findStringLoc(buff, "time=", RTT_pos);
+    int foundTTL  = findStringLoc(buff, "ttl=", TTL_pos);
+// 2. ONLY parse if BOTH fields exist on this specific line of the buffer
+    if (foundTime == 1 && foundTTL == 1) {
+        // Safe extraction
+        sscanf(buff + RTT_pos, "time=%f", &peer.signal.RTT_ms);
+        sscanf(buff + TTL_pos, "ttl=%hhd", &peer.signal.ttl);
+
+        std::cout << "\n>>> [Parsed Data] <<<" << std::endl;
+        std::cout << "Latency measured at " << peer.signal.RTT_ms << " ms" << std::endl;
+        std::cout << "TTL measured at " << (int)peer.signal.ttl << std::endl;
+        std::cout << "---------------------\n" << std::endl;
     }
-    // find the location of where the rtt value exists
-    if((findStringLoc(buff, "rtt=", RTT_pos)) == -1){
-        perror("no such value exists in the buffer");
-    }
-
-    sscanf(buff + RTT_pos, "time=%fms", &peer.signal.RTT_ms);
-    sscanf(buff + TTL_pos, "TTL=%d", &peer.signal.ttl);
-
-    std::cout<< "Latency measured at " << peer.signal.RTT_ms << std::endl;
-    std::cout<< "TTL measured at " << peer.signal.ttl << std::endl;
-
-
 
 
 
@@ -89,6 +89,7 @@ int main(int argc, char *argv[])
     const char *host = "google.com"; // ip address to be translate
     const char *PING_BASE = "ping -c 4 ";
 
+    Peer peer;
     char pingCall[64];
     char buff[MAX_BUFFER_SIZE];
 
@@ -115,6 +116,7 @@ int main(int argc, char *argv[])
     }
     while (fgets(buff, MAX_BUFFER_SIZE, pipe) != NULL){
         printf("%s", buff);
+        extractPingStats(peer, buff);
     } 
     status = pclose(pipe);
     if (status == -1) {
@@ -122,6 +124,8 @@ int main(int argc, char *argv[])
     perror("error when closing pipe");
     }
 
+    std::cout << "Latency measured for this peer " << peer.signal.RTT_ms << " ms" << std::endl;
+    std::cout << "Hops measured for this peer " << (STARTING_TTL - (int)peer.signal.ttl) << " hops" << std::endl; 
 
     return 0;
 
