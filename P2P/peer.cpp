@@ -23,10 +23,11 @@ campus. The destination should be able to read the incoming TTL.
 #include <fstream>
 #include <string>
 #include <vector>
+#include <sstream>
 
 #define MAX_BUFFER_SIZE 1200
 #define STARTING_TTL 64
-#define SERVER_PORT 7777
+
 
 /* DATA STRUCTURES FOR DATA COLLECTION */
 
@@ -169,17 +170,28 @@ bool executePing(const char *PING_BASE, char *buff, struct Peer &peer){
 
 int main(int argc, char *argv[])
 {
-    // Ensure a hosts file was provided via command line argument
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <hosts_file_path>\n";
-        return 1;
-    }
-
+    const char *hosts_file;
+    const char *host;
+    const char *port;
     int s;
-    const char* hosts_file = argv[1];
-    const char* PING_BASE = "ping -c 4 ";
-    const char* host = argv[2];
+    const char *PING_BASE = "ping -c 4 ";
     char buff[MAX_BUFFER_SIZE];
+    // Ensure a hosts file was provided via command line argument
+   
+	if (argc == 4) //takes in requirements to run this file
+	{
+        //Gather and save input data for use
+        hosts_file = argv[1];
+       	host = argv[2];
+        port = argv[3];
+    
+	}
+    else
+	{
+       	fprintf( stderr, "usage error: %s host\n", argv[0] );
+       	exit( 1 );
+   	}
+
     
     std::vector<Peer> network_peers;
     std::ifstream file(hosts_file);
@@ -231,7 +243,7 @@ int main(int argc, char *argv[])
             network_peers.push_back(target_peer);
         }
     }
-    file.close()
+    file.close();
 
     std::cout << "Successfully initialized " << network_peers.size() << " target peers.\n";
     std::cout << "=========================================\n";

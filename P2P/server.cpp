@@ -110,7 +110,7 @@ int find_max_fd(const fd_set *fs);
 int main(int argc, char *argv[]){
 
 
-	std::vector<struct peer_entry> peerEntries;	//create a vector that holds all peerInfo
+	std::vector<Peer> peerEntries;	//create a vector that holds all peerInfo
 	const char* SERVER_PORT;
 
 	if (argc == 2){
