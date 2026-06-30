@@ -26,6 +26,7 @@ campus. The destination should be able to read the incoming TTL.
 
 #define MAX_BUFFER_SIZE 1200
 #define STARTING_TTL 64
+#define SERVER_PORT 7777
 
 /* DATA STRUCTURES FOR DATA COLLECTION */
 
@@ -41,6 +42,7 @@ struct Peer{
     Signal signal;
     uint32_t peerID = 0;
 	char ip_string[INET_ADDRSTRLEN] = "";
+    char location[32] = "";
 };
 
 /* NETWORK SOCKET CONNECTION SECTION */
@@ -258,7 +260,7 @@ int main(int argc, char *argv[])
 
 
     if((sendall(s, serialized_data, &total_bytes)) == -1){
-        perror("Error in sending data")
+        perror("Error in sending data");
     };
 
     return 0;
