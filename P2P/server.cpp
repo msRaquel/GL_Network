@@ -47,8 +47,6 @@ void AppendToGSPMatrix(Peer* incoming_matrix, size_t peer_count, const std::stri
     long int current_time = static_cast<long int>(time(NULL));
 
     // If it's a completely flat structure where each incoming packet is one time-slice:
-    // It's often easier to log: Timestamp, Node_ID, RTT, Hops
-    // And let a 3-line Python script pivot it into the final matrix!
     for (size_t i = 0; i < peer_count; ++i) {
         csv_file << current_time << ","
                  << incoming_matrix[i].peerID << ","
@@ -184,7 +182,7 @@ int main(int argc, char *argv[]){
                 
                 std::string gsp_log_file = "network_telemetry_raw.csv";
                 
-                // Call the updated handler with your file path
+                // Call the updated handler with file path
                 ProcessIncomingMatrix(s, buffer, n, gsp_log_file);
                 break;
             }
