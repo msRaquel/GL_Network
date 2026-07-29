@@ -243,7 +243,7 @@ int main(int argc, char *argv[])
     // if this computer is #1 then ping 2-26 while also providing the latency of all other nodes
     for(size_t i = 0; i < network_peers.size(); ++i){
 
-        snprintf(network_peers.pair_id, sizeof(network_peers.pair_id), "%u-%u", peerID, network_peers[i].peerID);
+        snprintf(network_peers.pair_id, sizeof(network_peers.pair_id), "%u-%u", peerID, network_peers[i].);
 
 
         // starting with peer 1, ping 1-2,3,4,5
