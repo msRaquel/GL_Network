@@ -40,7 +40,7 @@ struct Signal{
 
 // keep track of peer information
 struct Peer{
-    Signal signal;
+    std::vector<Signal> signals = {}; 
     uint32_t peerID = 0;
 	char ip_string[INET_ADDRSTRLEN] = "";
     char location[32] = "";
@@ -94,28 +94,34 @@ int findStringLoc(char *buff, const char *goalString, size_t &index){
 // goal of this function is to extract values returned by the ping command 
 // buffer will be provided as an argument with the statistics provided by ping
 // once values have been extracted initialize a peer struct with the values found
-int extractPingStats(struct Peer &peer, char *buff){
+int extractPingStats(struct Peer &peer, char *buff, int &count){
     // use findString function to find the location of the time and round trip values
     size_t RTT_pos,TTL_pos;
-     
+    float RTT;
+    uint8_t ttl;
+
+    // initialize a signal struct to store and later add to peer vector of signals
+    Signal signal;
+
     // find the location of where the time value exists
     int foundTime = findStringLoc(buff, "time=", RTT_pos);
     int foundTTL  = findStringLoc(buff, "ttl=", TTL_pos);
     // ONLY parse if BOTH fields exist on this specific line of the buffer
+
     if (foundTime == 1 && foundTTL == 1) {
         // Safe extraction
-        sscanf(buff + RTT_pos, "time=%f", &peer.signal.RTT_ms);
-        sscanf(buff + TTL_pos, "ttl=%hhd", &peer.signal.ttl);
+        sscanf(buff + RTT_pos, "time=%f", &signal.RTT_ms);
+        sscanf(buff + TTL_pos, "ttl=%hhd", &signal.ttl);
+
+        peer.signals.push_back(signal);
 
         std::cout << "\n>>> [Parsed Data] <<<" << std::endl;
-        std::cout << "Latency measured at " << peer.signal.RTT_ms << " ms" << std::endl;
-        std::cout << "TTL measured at " << (int)peer.signal.ttl << std::endl;
+        std::cout << "Minimum Latency measured at " << signal.RTT_ms << " ms" << std::endl;
+        std::cout << "TTL measured at " << (int)signal.ttl << std::endl;
         std::cout << "---------------------\n" << std::endl;
     }
-    else {
-        return -1;
-    }
 
+    count++;
     return 1;
 }
 
@@ -148,34 +154,114 @@ bool executePing(const char *PING_BASE, char *buff, struct Peer &peer){
         perror("error opening pipe");
         exit( 1 );
     }
+    // while receving the output from the pipe print the buffer and then exctract the ping statistic
+    // fgets read line by line so should be able to extract each signal and save to peers signal vector
+
     while (fgets(buff, MAX_BUFFER_SIZE, pipe) != NULL){
+
+        int count = 0;
         printf("%s", buff);
-        if ((extractPingStats(peer, buff) == -1))
+
+        if ((extractPingStats(peer, buff, count) == -1))
         {
             return false;
         }
+
+
     } 
     status = pclose(pipe);
     if (status == -1) {
         /* Error reported by pclose() */
         perror("error when closing pipe");
     }
+  
+    for (int i = 0; i < peer.signals.size(); i++){
+        std::cout << "Latency signalsvg measured for this peer " << peer.signals[i].RTT_ms << " ms" << std::endl;
+        std::cout << "Hops measured for this peer " << (STARTING_TTL - (int)peer.signals[i].ttl) << " hops" << std::endl; 
+    }
 
-    std::cout << "Latency measured for this peer " << peer.signal.RTT_ms << " ms" << std::endl;
-    std::cout << "Hops measured for this peer " << (STARTING_TTL - (int)peer.signal.ttl) << " hops" << std::endl; 
 
 
     return true;
 };
 
+
+void initializePeers(std::vector<Peer> &network_peers, std::vector<std::string> &peer_ip, const char *hosts_file){
+
+    std::ifstream file(hosts_file);
+
+     if (!file.is_open()) {
+        std::cerr << "Error: Could not open host file: " << hosts_file << "\n";
+        exit(1);
+    }
+
+    std::string line;
+    // Parse Comma-Separated Hosts File
+    while (std::getline(file, line)) {
+        // Skip empty lines or header comments
+        if (line.empty() || line[0] == '#') continue;
+
+        // index for 
+        int i = 0;
+
+        std::stringstream ss(line);
+        std::string id_str, ip_str, loc_str;
+
+        // Extract comma-separated tokens
+        if (std::getline(ss, id_str, ',') && std::getline(ss, ip_str, ',') && std::getline(ss, loc_str, ',')) {
+            
+            // Helper function logic to clean up leading/trailing whitespaces from parsing
+            auto trim = [](std::string& s) {
+                s.erase(0, s.find_first_not_of(" \t\r\n"));
+                s.erase(s.find_last_not_of(" \t\r\n") + 1);
+            };
+            trim(id_str);
+            trim(ip_str);
+            trim(loc_str);
+
+            Peer target_peer;
+            target_peer.peerID = static_cast<uint32_t>(std::atoi(id_str.c_str()));
+
+            
+            // Safely copy IP and Location into char 
+            std::strncpy(target_peer.ip_string, ip_str.c_str(), INET_ADDRSTRLEN - 1);
+            target_peer.ip_string[INET_ADDRSTRLEN - 1] = '\0';
+
+            std::strncpy(target_peer.location, loc_str.c_str(), sizeof(target_peer.location) - 1);
+            target_peer.location[sizeof(target_peer.location) - 1] = '\0';
+
+            // Initialize signals
+            Signal signal;
+            signal.RTT_ms = -1.0f;
+            signal.ttl = 0;
+            
+
+            network_peers[i].signals.push_back(signal);
+            peer_ip.push_back(ip_str);
+            
+        }
+
+        i++;
+    }
+    file.close();
+
+    std::cout << "Successfully initialized " << network_peers.size() << " target peers.\n";
+    std::cout << "=========================================\n";
+
+}
+
+
+
 int main(int argc, char *argv[])
 {
+    std::string input;
     const char *hosts_file;
     const char *host;
     const char *port;
     int s;
-    const char *PING_BASE = "ping -c 4 ";
+    const char *PING_BASE = "ping -c 3 -i 0.2 -W 1 ";
     char buff[MAX_BUFFER_SIZE];
+    bool probing = true;
     // Ensure a hosts file was provided via command line argument
    
 	if (argc == 4) //takes in requirements to run this file
@@ -193,72 +279,50 @@ int main(int argc, char *argv[])
    	}
 
     
+    // vector of peers to store network data
     std::vector<Peer> network_peers;
-    std::ifstream file(hosts_file);
+    // vector of ip addresses to connect to when we execute simulated traffic
+    std::vector<std::string> peer_ip;
 
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open host file: " << hosts_file << "\n";
-        return 1;
-    }
+    initializePeers(network_peers, peer_ip, hosts_file);
 
-    uint32_t current_id = 0;
+    std::cout << "\n======================================================\n";
+    std::cout << "PROBING PHASE\n";
+    std::cout << "Press 'start' to start probing\n";
+    std::cout << "Press 'stop' to stop\n";
+    std::cout << "\n======================================================\n";
 
-   std::string line;
-    // Parse Comma-Separated Hosts File
-    while (std::getline(file, line)) {
-        // Skip empty lines or header comments
-        if (line.empty() || line[0] == '#') continue;
+    
 
-        std::stringstream ss(line);
-        std::string id_str, ip_str, loc_str;
+    while(1){
+        std::cout << "Enter a command: ";
+        std::cin >> input; 
 
-        // Extract comma-separated tokens
-        if (std::getline(ss, id_str, ',') &&
-            std::getline(ss, ip_str, ',') &&
-            std::getline(ss, loc_str, ',')) {
-            
-            // Helper function logic to clean up leading/trailing whitespaces from parsing
-            auto trim = [](std::string& s) {
-                s.erase(0, s.find_first_not_of(" \t\r\n"));
-                s.erase(s.find_last_not_of(" \t\r\n") + 1);
-            };
-            trim(id_str);
-            trim(ip_str);
-            trim(loc_str);
-
-            Peer target_peer;
-            target_peer.peerID = static_cast<uint32_t>(std::atoi(id_str.c_str()));
-            
-            // Safely copy IP and Location into char 
-            std::strncpy(target_peer.ip_string, ip_str.c_str(), INET_ADDRSTRLEN - 1);
-            target_peer.ip_string[INET_ADDRSTRLEN - 1] = '\0';
-
-            std::strncpy(target_peer.location, loc_str.c_str(), sizeof(target_peer.location) - 1);
-            target_peer.location[sizeof(target_peer.location) - 1] = '\0';
-
-            // Initialize signals
-            target_peer.signal.RTT_ms = -1.0f;
-            target_peer.signal.ttl = 0;
-
-            network_peers.push_back(target_peer);
-        }
-    }
-    file.close();
-
-    std::cout << "Successfully initialized " << network_peers.size() << " target peers.\n";
-    std::cout << "=========================================\n";
-
-  for (size_t i = 0; i < network_peers.size(); ++i) {
-        std::cout << "[Target " << i + 1 << "/" << network_peers.size() 
-                  << "] Probing Location: " << network_peers[i].location 
-                  << " (ID: " << network_peers[i].peerID << ")\n";
         
-        bool success = executePing(PING_BASE, buff, network_peers[i]);
+
+        if (input == "start")
+        {
+
+            for (size_t i = 0; i < network_peers.size(); ++i) {
+                std::cout << "[Target " << i + 1 << "/" << network_peers.size() 
+                    << "] Probing Location: " << network_peers[i].location 
+                    << " (ID: " << network_peers[i].peerID << ")\n";
         
-        if (!success) {
-            std::cerr << "Warning: Failed execution to " << network_peers[i].ip_string << "\n";
+                bool success = executePing(PING_BASE, buff, network_peers[i]);
+        
+                if (!success) {
+                    std::cerr << "Warning: Failed execution to " << network_peers[i].ip_string << "\n";
+                }
+                std::cout << "=========================================\n";
+            }
+        } 
+        else if (input == "stop"){
+            
+            break;
         }
-        std::cout << "=========================================\n";
+
+
+
     }
 
     if ( ( s = lookup_and_connect( host, port ) ) < 0 ) {
